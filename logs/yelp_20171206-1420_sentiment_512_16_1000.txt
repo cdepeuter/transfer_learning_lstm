@@ -1,0 +1,5 @@
+time 20171206-1420
+BATCH_SIZE 512
+TEST SIZE 2084
+lstmUnits 16
+iterations 1000

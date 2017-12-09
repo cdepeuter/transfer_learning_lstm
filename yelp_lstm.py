@@ -25,8 +25,8 @@ TEST_SIZE= 2084
 iterations = 1000
 maxSeqLength = 50
 numDimensions = 300
-numClasses = 5
-BATCH_SIZE = 2048
+numClasses = 2
+BATCH_SIZE = 512
 lstmUnits = 16
 target = 'sentiment'
 
@@ -51,7 +51,7 @@ with codecs.open("logs/yelp_"+'_'.join(str_params)+".txt",'w') as fp:
     fp.write("iterations " + str(iterations) + "\n")
 
 
-VECTORS_FILE = "data/vecs/w2v_vectors.npy"
+VECTORS_FILE = "data/w2v_vectors.npy"
 DATA_FILE_START = "yelp_w2vreviews"
 
 wordVectors = np.load(VECTORS_FILE)
@@ -59,15 +59,14 @@ print("wordVectors shape", wordVectors.shape)
 
 
 
-def getYelpData():
-    train_files = [f for f in os.listdir("data/vecs") if f.startswith(DATA_FILE_START) and f.endswith(".npy")]
+def getYelpData(size=25000):
+    #train_files = [f for f in os.listdir("data/vecs") if f.startswith(DATA_FILE_START) and f.endswith(".npy")]
     
-    frames = [np.load("data/vecs/" + f) for f in train_files]
-    labels = [np.load("data/vecs/" + f.replace("reviews", target)) for f in train_files]
-    
-    X = np.vstack(frames)
-    y = np.vstack(labels)
-    
+    X = np.load("data/yelp/vecs/reviews.npy")
+    y = np.load("data/yelp/vecs/labels.npy")
+    ix = np.random.randint(X.shape[0], size=size)
+    X = X[ix,]
+    y = y[ix,]
     return X.astype(int),y.astype(int)
 
 
@@ -83,10 +82,10 @@ def getTrainBatch(size=None):
     
     return train_data[ix,], train_labels[ix, ]
 
-def getYelpTest():
-    arr = np.load("data/vecs/test_yelp_w2vreviews_0.npy")
-    labels = np.load("data/vecs/test_yelp_w2vratings_0.npy")
-    return arr, labels
+# def getYelpTest():
+#     arr = np.load("data/vecs/test_yelp_w2vreviews_0.npy")
+#     labels = np.load("data/vecs/test_yelp_w2vratings_0.npy")
+#     return arr, labels
 
 
 def getTestBatch(size=None):
@@ -105,7 +104,7 @@ def getTestBatch(size=None):
 
 
 
-train_data, train_labels = getYelpData()
+train_data, train_labels = getYelpData(size=5000)
 
 print("train data shape", train_data.shape)
 print("train labels shape", train_labels.shape)
@@ -113,7 +112,7 @@ print("train data max:", train_data.max())
 print("train data balance", train_labels.mean(axis=0))
 
 
-test_data, test_labels = getYelpTest()
+test_data, test_labels = getYelpData(size=10000)
 print(len(test_labels), test_labels.shape)
 print(test_data.shape)
 print("test data balance", test_labels.mean(axis=0))
@@ -209,8 +208,8 @@ with codecs.open("logs/yelp_final_"+'_'.join(str_params)+".txt",'w') as fp:
     fp.write("TEST SIZE " + str(TEST_SIZE) + "\n")
     fp.write("lstmUnits " + str(lstmUnits) + "\n")
     fp.write("iterations " + str(iterations) + "\n")
-    fp.write("test accuracy " + str(final_test_acc) + "\n")
-    fp.write("yelp accuracy " + str(final_yelp_acc) + "\n")
+    # fp.write("test accuracy " + str(final_test_acc) + "\n")
+    # fp.write("yelp accuracy " + str(final_yelp_acc) + "\n")
 
         
 

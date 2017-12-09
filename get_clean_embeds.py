@@ -47,7 +47,6 @@ def review_to_w2v_vector(rev):
     words_in_order = np.random.randint(len(final_vocab), size=WORDS_TO_TAKE, dtype='int32')
     indexCounter = 0
     good_words = [w for w in split_words if w in final_vocab_lookup]
-    review_sizes[len(good_words)] += 1
     
     for word in good_words:
         words_in_order[indexCounter] = final_vocab_lookup[word]

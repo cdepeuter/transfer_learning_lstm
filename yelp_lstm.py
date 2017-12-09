@@ -31,6 +31,7 @@ lstmUnits = 16
 target = 'sentiment'
 
 if len(sys.argv) > 1:
+
     target = sys.argv[1]
     if len(sys.argv) > 2:
         BATCH_SIZE = int(sys.argv[2])
@@ -208,7 +209,7 @@ with codecs.open("logs/yelp_final_"+'_'.join(str_params)+".txt",'w') as fp:
     fp.write("TEST SIZE " + str(TEST_SIZE) + "\n")
     fp.write("lstmUnits " + str(lstmUnits) + "\n")
     fp.write("iterations " + str(iterations) + "\n")
-    # fp.write("test accuracy " + str(final_test_acc) + "\n")
+    fp.write("test accuracy " + str(final_test_acc) + "\n")
     # fp.write("yelp accuracy " + str(final_yelp_acc) + "\n")
 
         

@@ -1,47 +1,50 @@
-# Sentiment Analysis using LSTM's and Transfer Learning
+# Using transfer learning to predict review sentiment and category
 
-## Data Cleaning (clean_data.py)
+In this paper, we simulate an environment where a user is interested in performing a classification task on a small text dataset, while a larger, similar text dataset is available. Because Deep Learning approaches perform better on large datasets, we compare performance of models built on the smaller dataset itself versus a model built on the larger dataset and then transferred to the smaller one. Specifically, we implement two approaches to classify Yelp reviews as positive- or negative-sentiment: First, an LSTM-based model trained on a dataset of Amazon reviews and evaluated on a small dataset of Yelp reviews, and then an LSTM model trained and evaluated on the Yelp dataset itself. For very small samples of the Yelp dataset, the transfer approach is better; for very large samples, the self-trained model performs better. The first guiding question for our project is: How big must the Yelp dataset be in order for it to be preferred to train on Yelp itself rather than rely on transfer learning? We then evaluate the tenability of implementing a transfer approach across tasks, where a network trained to classify sentiment on Amazon reviews is re-trained to another task for Yelp.
 
-This file takes inputs <source> <split_size>. If none are given source='amazon', split_size=65536
+## Data Cleaning (https://github.com/cdepeuter/dl_project/blob/master/clean_data.py)
 
-`$ python clean_data.py yelp 65536 `
+We first clean the raw reviews for each source. Cleaning involves lemmatization, lower casing all words, and the sentiment score to binary mapping. This process reads from the data/<source>/raw and writes to the data/<source>/cleaned folder
 
-Raw data files are in data/<source>/raw/. These raw files undergo the same pre-processing which at the moment includes:
-* Removing special characters
-* Lemmatization
-* Sentiment mapping (5 stars -> Binary [0,1])
-* For yelp data, a category chosen out of 5 "Core" categories is assigned
-
-All cleaned data is saved to data/<source>/cleaned/
-
-## Embedding (get_clean_embeds.py)
-No inputs for this file, it does all processing for amazon and yelp by default.
-
-Using the googleNews word2vec embedding, take the top VOCAB_SIZE (default=400,000) occuring words. This is the vocabulary going forward.
-* Get embeddings of first WORDS_TO_TAKE (default=100) words of review which are in the vocab, return as a (NUM_REVIEWS, WORDS_TO_TAKE).
-* For amazon reviews, split into files of SPLIT_SIZE (default=16834), save with one-hot-encoded target (sentiment) array in data/amazon/vecs/
-* For yelp, get review embedding matrix in same manner, save both rating target, sentiment target, and category in data/yelp/vecs.
-
-## LSTM
-
-Regular LSTM training on amazon data is done in lstm_gcp.py 
-
-`$ python lstm_gcp <target> <batch_size> <lstm_units> <iterations>`
-`$ python lstm_gcp 1024 48 5000`
+`$ python clean_data.py amazon` 
+`$ python clean_data.py yelp` 
 
 
-Regular training of Yelp lstm for comparison is done in yelp_lstm.py. Inputs determine what the target variable, batch size, lstm units, iterations
+## Building a vocabulary (https://github.com/cdepeuter/dl_project/blob/master/make_vocab.py) 
+
+In this project we use two different vocabularies, one standard vocabulary using the most frequent 400,000 words in the google news embedding
+
+### Finding domain-independent sentiment words (https://github.com/cdepeuter/dl_project/blob/master/get_domain_independent_sentiments.py)
+
+We take the dataset (https://nlp.stanford.edu/projects/socialsent/) from the Stanford CoreNLP group which describes the polarity of words for different subreddits, and find the top 2000 words that occur in the must subreddit polarity lists, we consider this as a list of domain-independent polarized words. We build a vocabulary from GoogleNews in the same way as before, but not allowing for any of these words.
 
 
-Possible targets:
-* 'semntiment' : target is [0,1] sentiment
-* 'rating' : [1-5] stars
-* 'category': [0-4] category
+## Review embedding (https://github.com/cdepeuter/dl_project/blob/master/get_clean_embeds.py)
 
-`$ python yelp_lstm <target> <batch_size> <lstm_units> <iterations>`
-`$ python yelp_lstm category 512 32 1000`
+The next step is to get embeddings for each review. To do this we use the GoogleNews word2vec embedding. For each review we take the embedding for the first 100 words in each review that is in the defined vocabulary, this is the input for our LSTM.
 
-Retraining of a chosen model is done in load_retrain_lstm.py
+## Amazon-trained LSTM: (https://github.com/cdepeuter/dl_project/blob/master/lstm_gcp.py)
 
-`$ python load_retrain_lstm <model_to_retrain_path> <yelp_target>`
-`$ python load_retrain_lstm models/final_lstm.cptk rating`
+A standard Tensorflow LSTM implementation with inputs for batch size, LSTM units, and iterations. A we used Google Cloud Platform to grid search across these parameters (https://github.com/cdepeuter/dl_project/blob/master/grid_search_lstm.py).
+
+`$ python lstm_gcp.py 512 96 5000` <- the best model, achieving 96% accuracy
+`$ python lstm_gcp.py 1024 48 5000`
+`$ python lstm_gcp.py 1024 96 5000`
+
+## Yelp-trained LSTM (https://github.com/cdepeuter/dl_project/blob/master/yelp_lstm.py)
+
+Since we were interested in 3 different outcome spaces, as well as how well the LSTM would do for different sizes of datasets, this file has inputs for the target variable, as well as the size of data to train on.
+
+`$ python yelp_lstm.py sentiment 15000`
+`$ python yelp_lstm.py stars 20000`
+`$ python yelp_lstm.py cats 20000`
+
+## Retraining the last layer for Yelp data (https://github.com/cdepeuter/dl_project/blob/master/load_retrain_lstm.py)
+
+This file allows for retraining an inputted LSTM for different targets as well as Yelp data sizes. Example usage.
+`$ python load_retrain_lstm.py sentiment 24000`
+`$ python load_retrain_lstm.py stars 7500`
+`$ python load_retrain_lstm.py cats 2000`
+
+
+All models were trained using Google Cloud Platform.

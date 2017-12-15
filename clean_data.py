@@ -77,7 +77,7 @@ def clean_save_yelp(revs, biz):
     good_reviews["stars"] = good_reviews["stars_x"]
     good_reviews["clean_text"] = good_reviews.text.map(clean_review_text)
     good_reviews["sentiment"] = good_reviews.stars.map(review_sentiment)
-    good_reviews = good_reviews[["stars", "cat", "clean_text"]]
+    good_reviews = good_reviews[["stars", "cat", "clean_text", "sentiment"]]
     print(good_reviews.shape)
     good_reviews.to_csv("./data/yelp/cleaned/yelp.csv", index=False)
     print("saved yelp reviews")
@@ -93,14 +93,16 @@ def clean_save_amazon(data_files):
                     datas.append(rev)
 
             data = pd.DataFrame.from_records(datas)
-            print("dataframe loaded", data.shape)
+            # only keep reviews with so many words
+            data = data[data.reviewText.map(lambda x:len(x.split())) > 75]
+            print("dataframe loaded, small reviews removed", data.shape)
             data["sentiment"] = data["overall"].map(review_sentiment)
             # remove middling reviews
             data = data[data.sentiment != -1]
             data["clean_text"] = data.reviewText.map(clean_review_text)
 
             # only keep columns we want
-            data = data[["clean_text", "sentiment"]]
+            data = data[["clean_text", "sentiment", "overall"]]
             file = f.replace("raw", "cleaned").replace(".json", ".csv")
 
 

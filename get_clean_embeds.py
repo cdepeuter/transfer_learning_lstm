@@ -8,6 +8,16 @@ import os
 import sys
 import collections
 from imblearn.over_sampling import SMOTE
+import sklearn
+
+def get_vocab(name="regular_vocab"):
+    with codecs.open("data/vocab/"+name+".json", encoding='utf-8') as f:
+        vocab = json.loads(f.read())
+
+    with codecs.open("data/vocab/"+name+"_lookup.json", encoding='utf-8') as f:
+        lookup= json.loads(f.read())
+
+    return vocab, lookup
 
 
 def one_hot_rating(label):
@@ -59,11 +69,11 @@ def review_to_w2v_vector(rev):
 
 def get_amazon_embeds():
     amazon_dir = "./data/amazon/cleaned/"
-    cleaned_files = [amazon_dir+f for f in os.listdir(amazon_dir)]
-
+    cleaned_files = [amazon_dir+f for f in os.listdir(amazon_dir) if f.endswith(".csv")]
+    frames = []
     for f in cleaned_files:
         print(f)
-        frame = pd.read_csv("data/"+f, encoding='utf-8')
+        frame = pd.read_csv(f, encoding='utf-8')
         print("frame shape", frame.shape, frame.columns)
         
         frame = frame[(frame.clean_text.notnull()) & (frame.clean_text.str.len() > 100)]
@@ -71,12 +81,11 @@ def get_amazon_embeds():
         frames.append(frame)
         
     data = pd.concat(frames)
-
-    data = sklearn.utils.shuffle(data, random_state=1)
-    # only keep reviews with so many words
-    data = data[data.clean_text.map(lambda x:len(x.split())) > 75]
     print("final shape", data.shape)
-
+    numClasses = 2
+    data = sklearn.utils.shuffle(data, random_state=1)
+    if data.shape[0] > MAX_DATA_SIZE:
+        data = data[0:MAX_DATA_SIZE]
     start_index = 0
     SPLIT_SIZE = 16384
     shuffled_frames = []
@@ -84,10 +93,11 @@ def get_amazon_embeds():
         shuffled_frames.append(data[start_index:start_index+SPLIT_SIZE])
         start_index += SPLIT_SIZE
 
-    for i in range(int(data.shape / SPLIT_SIZE)):
+    for i in range(int(data.shape[0] / SPLIT_SIZE)):
 
-        file_name = "balanced_w2vreviews_" + str(i)
-        label_file_name = "balanced_w2vlabels_" + str(i)
+        file_name = "domain_w2vreviews_" + str(i)
+        label_file_name = "domain_w2vlabels_" + str(i)
+        stars_file_name = "domain_w2vstars_" + str(i)
         batch = shuffled_frames[i]
         
         
@@ -116,82 +126,65 @@ def get_amazon_embeds():
             label_file_name = label_file_name.replace("balanced", "test")
         
         print("saving arr", arr.shape)
-        np.save("data/amazon/vecs/" + file_name, arr)
-        np.save("data/amazon/vecs/" + label_file_name, labels)
+        np.save("data/amazon/domain_vecs/" + file_name, arr)
+        np.save("data/amazon/domain_vecs/" + label_file_name, labels)
     return
 
 
 def get_yelp_embeds():
     data = pd.read_csv("./data/yelp/cleaned/yelp.csv")
     data = data[data.clean_text.map(lambda x:len(x.split())) > 75]
+    data = data[data.sentiment >= 0]
     print("yelp data shape", data.shape)
-    
+    print("unique sentiment")
     vecs = data.clean_text.map(review_to_w2v_vector)
     numClasses = len(data.sentiment.unique())
-    numCats = len(data.cat.unique())
+    numCats = 5
+    numStars = 5
     
     arr = np.zeros((len(vecs), WORDS_TO_TAKE))
     labels = np.zeros((len(vecs), numClasses))
-    cats =  np.zeros((len(vecs), numCcats))
-
+    stars = np.zeros((len(vecs), numStars))
+    cats =  np.zeros((len(vecs), numCats))
     for j, v in enumerate(vecs):
         arr[j,] = v
         labels[j,] = one_hot_label(data.sentiment.iloc[j])
         cats[j,] = one_hot_category(data.cat.iloc[j])
+        stars[j,] = one_hot_rating(data.stars.iloc[j])
 
-    np.save("./data/yelp/vecs/reviews", arr)
-    np.save("./data/yelp/vecs/labels", labels)
-    np.save("./data/yelp/vecs/cats", cats)
+    np.save("./data/yelp/domain_vecs/domain_reviews", arr)
+    np.save("./data/yelp/domain_vecs/donain_labels", labels)
+    np.save("./data/yelp/domain_vecs/domain_cats", cats)
+    np.save("./data/yelp/domain_vecs/domain_stars", stars)
 
     print("done saving yelp")
 	
 
-def is_valid_word(w):
-    """
-        Only want lower case words that aren't stopwords and arent tags or other nonsense like ####
-    """
-    if not w.lower() == w:
-        return False
-#     if w in stop_words:
-#         return False
-    if re.search("[^(\w|\'|\-)]", w):
-        return False
-#     if not w in model.wv.vocab:
-#         # shouldnt have to add this but for some reason it makes a difference, where are these words coming from?
-#         return False
-    
-    return True
 
 
 if __name__ == '__main__':
+    MAX_DATA_SIZE = 5000000
     SPLIT_SIZE = 16834
     WORDS_TO_TAKE = 100
     not_in_vocab = set()
-    VOCAB_SIZE = 400000
-	
     model = gensim.models.KeyedVectors.load_word2vec_format("w2v/GoogleNews-vectors-negative300.bin", binary=True)
-    vocab_counts = [(word, vocab_obj.count) for  (word, vocab_obj) in model.vocab.items() if is_valid_word(word)]
-    vocab_counts = sorted(vocab_counts, key=lambda x:x[1], reverse=True)
-    print("found counts")
-    # needs a list for ordering
-    final_vocab = [v[0] for v in vocab_counts[0:VOCAB_SIZE]]
-    print("vocab set")
-    # get a lookup for O[1] access
-    final_vocab_lookup = {v:final_vocab.index(v) for v in final_vocab}
-    reverse_lookup = {v: k for k, v in final_vocab_lookup.items()}
+
+    vocab_name = "domain_vocab"
+    final_vocab, final_vocab_lookup = get_vocab(vocab_name)
+    
+    VOCAB_SIZE = len(final_vocab)
+    print("vocab loaded, size", VOCAB_SIZE)
 
     word_vectors = np.zeros((VOCAB_SIZE, 300))
 
     for i, v in enumerate(final_vocab):
-        if v not in model.wv.vocab:
-            print("huh", v)
         word_vectors[i,] = model.wv[v]
         
-    np.save("data/w2v_vectors.npy", word_vectors)
+    np.save("data/domain_w2v_vectors.npy", word_vectors)
     print("saved word vectors")
-
-    get_yelp_embeds()
     get_amazon_embeds()
+    get_yelp_embeds()
+    
 
     print("all done")
 

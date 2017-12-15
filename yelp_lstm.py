@@ -7,7 +7,6 @@ import codecs
 import sys
 
 
-
 """
 LSTM for Yelp,
 
@@ -21,9 +20,9 @@ $ python yelp_lstm category 512 32 1000
 
 """
 current_time =  datetime.datetime.now().strftime("%Y%m%d-%H%M")
-TEST_SIZE= 2084
-iterations = 1000
-maxSeqLength = 50
+TRAIN_SIZE=None
+iterations = 100
+maxSeqLength = 100
 numDimensions = 300
 numClasses = 2
 BATCH_SIZE = 512
@@ -31,26 +30,19 @@ lstmUnits = 16
 target = 'sentiment'
 
 if len(sys.argv) > 1:
-
     target = sys.argv[1]
     if len(sys.argv) > 2:
-        BATCH_SIZE = int(sys.argv[2])
-        lstmUnits = int(sys.argv[3])
-        iterations = int(sys.argv[4])
-
+        TRAIN_SIZE = int(sys.argv[2])
+        if len(sys.argv) > 3:
+            BATCH_SIZE = int(sys.argv[3])
+            lstmUnits = int(sys.argv[4])
+            iterations = int(sys.argv[5])
 
 print("batch size", BATCH_SIZE)
 print("lstmUnits", lstmUnits)
 print("iterations", iterations)
 
-str_params = [current_time, target, str(BATCH_SIZE), str(lstmUnits), str(iterations)]
-with codecs.open("logs/yelp_"+'_'.join(str_params)+".txt",'w') as fp:
-    fp.write("time " + current_time + "\n")
-    fp.write("BATCH_SIZE " + str(BATCH_SIZE) + "\n")
-    fp.write("TEST SIZE " + str(TEST_SIZE) + "\n")
-    fp.write("lstmUnits " + str(lstmUnits) + "\n")
-    fp.write("iterations " + str(iterations) + "\n")
-
+str_params = [current_time, target, str(BATCH_SIZE), str(lstmUnits), str(iterations), str(TRAIN_SIZE)]
 
 VECTORS_FILE = "data/w2v_vectors.npy"
 DATA_FILE_START = "yelp_w2vreviews"
@@ -59,65 +51,49 @@ wordVectors = np.load(VECTORS_FILE)
 print("wordVectors shape", wordVectors.shape)
 
 
-
-def getYelpData(size=25000):
-    #train_files = [f for f in os.listdir("data/vecs") if f.startswith(DATA_FILE_START) and f.endswith(".npy")]
-    
+def getYelpData():
     X = np.load("data/yelp/vecs/reviews.npy")
-    y = np.load("data/yelp/vecs/labels.npy")
-    ix = np.random.randint(X.shape[0], size=size)
-    X = X[ix,]
-    y = y[ix,]
-    return X.astype(int),y.astype(int)
+    if target == 'sentiment':  
+        y = np.load("data/yelp/vecs/labels.npy")
+    elif target == "cats":
+        y = np.load("data/yelp/vecs/cats.npy")
+    elif target == "stars":
+        y = np.load("data/yelp/vecs/stars.npy")
+
+    # shuffle the data
+    shuffle = np.random.permutation(np.arange(X.shape[0]))
+    X = X[shuffle,]
+    y = y[shuffle,]
+    if TRAIN_SIZE is not None:
+        X = X[:TRAIN_SIZE,]
+        y = y[:TRAIN_SIZE,]
+
+    # split into train and test sets
+    split_at = int(4*X.shape[0]/5)
+    X_train = X[0:split_at,]
+    y_train = y[0:split_at,]
+    X_test = X[split_at:,]
+    y_test = y[split_at:,]
+
+    return X_train.astype(int),y_train.astype(int), X_test.astype(int), y_test.astype(int)
 
 
 
-def getTrainBatch(size=None):
+def getTrainBatch(size):
     global train_data
     global train_labels
-        
-  
-    if size is not None:
-        #ix = np.array(range(size))
-        ix = np.random.randint(train_data.shape[0], size=size)
-    
-    return train_data[ix,], train_labels[ix, ]
-
-# def getYelpTest():
-#     arr = np.load("data/vecs/test_yelp_w2vreviews_0.npy")
-#     labels = np.load("data/vecs/test_yelp_w2vratings_0.npy")
-#     return arr, labels
+    ix = np.random.randint(train_data.shape[0], size=size)
+    return train_data[ix,], train_labels[ix,]
 
 
-def getTestBatch(size=None):
-    
-
-    arr = np.load("data/vecs/"+DATA_FILE_START.replace("balanced", "test")+"_0.npy")
-    labels = np.load("data/vecs/"+DATA_FILE_START.replace("balanced", "test").replace("reviews", "labels")+"_0.npy")
-    
-    if size is not None:
-        
-        ix = np.random.randint(arr.shape[0], size=size)
-        arr = arr[ix,]
-        labels = labels[ix,]
-    
-    return arr, labels
-
-
-
-train_data, train_labels = getYelpData(size=5000)
+train_data, train_labels, test_data, test_labels = getYelpData()
 
 print("train data shape", train_data.shape)
 print("train labels shape", train_labels.shape)
 print("train data max:", train_data.max())
-print("train data balance", train_labels.mean(axis=0))
-
-
-test_data, test_labels = getYelpData(size=10000)
-print(len(test_labels), test_labels.shape)
-print(test_data.shape)
+print("test labels and data shapes",test_labels.shape, test_data.shape)
 print("test data balance", test_labels.mean(axis=0))
-
+print("train data balance", train_labels.mean(axis=0))
 
 tf.reset_default_graph()
 
@@ -184,7 +160,6 @@ for i in range(iterations):
     #Save the network every 10,000 training iterations
     
     if i % 10 == 0:
-        
         writer.add_summary(summary, i)
         print("\n")
         print("step %d" % i)
@@ -198,21 +173,18 @@ for i in range(iterations):
         print("****************")
         print("test accuracy:  % f" % final_test_acc)
         print("\n\n")
-#         print("mean prediction", np.mean(pred))
-#         print("\n\n")
-        
 
-
+if TRAIN_SIZE is None:
+    TRAIN_SIZE = test_data.shape[0] + train_data.shape[0]
 with codecs.open("logs/yelp_final_"+'_'.join(str_params)+".txt",'w') as fp:
     fp.write("time " + current_time + "\n")
+    fp.write("target" + target)
     fp.write("BATCH_SIZE " + str(BATCH_SIZE) + "\n")
-    fp.write("TEST SIZE " + str(TEST_SIZE) + "\n")
+    fp.write("TRAIN SIZE " + str(TRAIN_SIZE) + "\n")
     fp.write("lstmUnits " + str(lstmUnits) + "\n")
     fp.write("iterations " + str(iterations) + "\n")
     fp.write("test accuracy " + str(final_test_acc) + "\n")
     # fp.write("yelp accuracy " + str(final_yelp_acc) + "\n")
-
-        
 
 
 # with codecs.open("logs/run_final_"+current_time+".txt",'w') as fp:

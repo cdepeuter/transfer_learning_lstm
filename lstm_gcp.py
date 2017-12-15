@@ -18,14 +18,14 @@ Yelp sentiment. But never train on this yelp data
 
 current_time =  datetime.datetime.now().strftime("%Y%m%d-%H%M")
 TEST_SIZE= 2084
-iterations = 1000
-maxSeqLength = 50
+iterations = 100
+maxSeqLength = 100
 numDimensions = 300
 numClasses = 2
-BATCH_SIZE = 2048
-lstmUnits = 16
+BATCH_SIZE = 512
+lstmUnits = 48
 data_vecs_path = "./data/amazon/vecs/"
-VECTORS_FILE = "data/vecs/w2v_vectors.npy"
+VECTORS_FILE = "data/domain_w2v_vectors.npy"
 DATA_FILE_START = "balanced_w2vreviews"
 TEST_FILE_START = "test_"
 if len(sys.argv) > 1:
@@ -52,21 +52,29 @@ with codecs.open("logs/amazon_lstm_"+'_'.join(str_params)+".txt",'w') as fp:
 
 
 
-def getTrainData(prefix, max_size=None):
-    train_files = [f for f in os.listdir(data_vecs_path) if f.startswith(prefix) and f.endswith(".npy")]
+def getAmazonData(max_size=None, training=True):
     
-    frames = [np.load(data_vecs_path + f) for f in train_files]
-    labels = [np.load(data_vecs_path + f.replace("reviews", "labels")) for f in train_files]
+    # get test set of files
+    if training:
+        files = [f for i, f in enumerate(os.listdir(data_vecs_path))if "reviews" in f and f.endswith(".npy") and i % 5 != 0]
+    else:
+        files = [f for i, f in enumerate(os.listdir(data_vecs_path)) if "reviews" in f and f.endswith(".npy") and i % 5 == 0]
+
+    print("getting amazon data", len(files))
+
+    frames = [np.load(data_vecs_path + f) for f in files]
+    labels = [np.load(data_vecs_path + f.replace("reviews", "labels")) for f in files]
     
     X = np.vstack(frames)
     y = np.vstack(labels)
 
     if max_size is not None:
-        ix = np.random.randint(X[0], size=max_size)
+        ix = np.random.randint(X.shape[0], size=max_size)
         X = X[ix,]
         y = y[ix,]
-    
+    print("full data shape", X.shape[0])
     return X.astype(int),y.astype(int)
+
 
 def getTrainBatch(size=None):
     global train_data
@@ -76,32 +84,18 @@ def getTrainBatch(size=None):
     if size is not None:
         #ix = np.array(range(size))
         ix = np.random.randint(train_data.shape[0], size=size)
-
+    
     return train_data[ix,], train_labels[ix, ]
 
-
-
-
-def getYelpData():
-    arr = np.load("data/yelp/vecs/_test_yelp_w2vreviews_0.npy")
-    labels = np.load("data/yelp/vecs/_test_yelp_w2vlabels_0.npy")
-    return arr, labels
-
-
-# def getTestBatch(size=None):
+def getYelpData(size=25000):
+    #train_files = [f for f in os.listdir("data/vecs") if f.startswith(DATA_FILE_START) and f.endswith(".npy")]
     
-
-#     arr = np.load(data_vecs_path+DATA_FILE_START.replace("balanced", "test")+"_0.npy")
-#     labels = np.load(data_vecs_path+DATA_FILE_START.replace("balanced", "test").replace("reviews", "labels")+"_0.npy")
-    
-#     if size is not None:
-        
-#         ix = np.random.randint(arr.shape[0], size=size)
-#         arr = arr[ix,]
-#         labels = labels[ix,]
-    
-#     return arr, labels
-
+    X = np.load("data/yelp/vecs/domain_reviews.npy")
+    y = np.load("data/yelp/vecs/domain_labels.npy")
+    ix = np.random.randint(X.shape[0], size=size)
+    X = X[ix,]
+    y = y[ix,]
+    return X.astype(int),y.astype(int)
 
 def one_hot_label(label):
     if label==0:
@@ -109,11 +103,10 @@ def one_hot_label(label):
     else:
         return np.array([0,1])
 
-
-# REMOVE WHEN ON GOOGLE CLOUD_PLATFORM
-MAX_TRAIN_SIZE = 2000000
-
-train_data, train_labels = getTrainData(DATA_FILE_START, max_size=MAX_TRAIN_SIZE)
+MAX_TRAIN_SIZE = None
+# # REMOVE WHEN ON GOOGLE CLOUD_PLATFORM
+# MAX_TRAIN_SIZE = 2000000
+train_data, train_labels = getAmazonData(max_size=MAX_TRAIN_SIZE)
 
 print("train data shape", train_data.shape)
 print("train labels shape", train_labels.shape)
@@ -125,7 +118,7 @@ yelp_data, yelp_labels = getYelpData()
 
 print("yelp data shape", yelp_data.shape)
 
-test_data, test_labels = getTrainData(TEST_FILE_START, max_size=TEST_SIZE)
+test_data, test_labels = getAmazonData(max_size=TEST_SIZE, training=False)
 
 print(len(test_labels), test_labels.shape)
 print(test_data.shape)

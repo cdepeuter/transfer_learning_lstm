@@ -20,82 +20,88 @@ $ python load_retrin_lstm category retrin_path batch_size, iterations
 
 """
 current_time =  datetime.datetime.now().strftime("%Y%m%d-%H%M")
-iterations = 1000
+iterations = 100
 numDimensions = 300
 BATCH_SIZE = 2048
+TEST_SIZE = 2048
+YELP_SIZE = 5000
+lstmUnits = 96
 target = 'sentiment'
-load_path = "./models/final_lstm20171205-1938.ckpt"
+load_path = "./models/final_lstm20171213-1242.ckpt"
+#load_path = "./models/final_lstm20171212-1542.ckpt"
+
 
 if len(sys.argv) > 1:
     target = sys.argv[1]
-    load_path = sys.argv[2]
-    if len(sys.argv) > 2:
-        BATCH_SIZE = int(sys.argv[3])
-        iterations = int(sys.argv[4])
+    YELP_SIZE = int(sys.argv[2])
+    if len(sys.argv) > 3:
+        load_path = sys.argv[3]
+    if len(sys.argv) > 4:
+        BATCH_SIZE = int(sys.argv[5])
+        iterations = int(sys.argv[6])
 
 
 print("batch size", BATCH_SIZE)
 print("lstmUnits", lstmUnits)
 print("iterations", iterations)
 
-str_params = [current_time, target, str(BATCH_SIZE), str(iterations), load_path.split("/")[-1].replace(".ckpt", "")]
-with codecs.open("logs/retrained_"+'_'.join(str_params)+".txt",'w') as fp:
-    fp.write("time " + current_time + "\n")
-    fp.write("BATCH_SIZE " + str(BATCH_SIZE) + "\n")
-    fp.write("load model " + load_path + "\n")
-    fp.write("iterations " + str(iterations) + "\n")
+str_params = [current_time, target, str(YELP_SIZE), str(BATCH_SIZE), str(iterations), load_path.split("/")[-1].replace(".ckpt", "")]
 
 
+def getTrainBatch(size):
+    global train_data
+    global train_labels
+    ix = np.random.randint(train_data.shape[0], size=size)
+    return train_data[ix,], train_labels[ix,]
 
-def getYelpData():
-    train_files = [f for f in os.listdir("data/vecs") if f.startswith(DATA_FILE_START) and f.endswith(".npy")]
+
+def getYelpData(size=None):
+    X = np.load("data/yelp/vecs/reviews.npy")
+
+    if target == 'sentiment':  
+        y = np.load("data/yelp/vecs/labels.npy")
+    elif target == "cats":
+        y = np.load("data/yelp/vecs/cats.npy")
+    elif target == "stars":
+        y = np.load("data/yelp/vecs/stars.npy")
     
-    frames = [np.load("data/vecs/" + f) for f in train_files]
-    labels = [np.load("data/vecs/" + f.replace("reviews", target)) for f in train_files]
-    
-    X = np.vstack(frames)
-    y = np.vstack(labels)
-    
-    return X.astype(int),y.astype(int)
+    # shuffle the data
+    shuffle = np.random.permutation(np.arange(X.shape[0]))
+    X = X[shuffle,]
+    y = y[shuffle,]
 
-# def getTestBatch(size=None):
-    
+    if size is not None:
+        X = X[0:size,]
+        y = y[0:size,]
 
-#     arr = np.load("data/vecs/"+DATA_FILE_START.replace("balanced", "test")+"_0.npy")
-#     labels = np.load("data/vecs/"+DATA_FILE_START.replace("balanced", "test").replace("reviews", "labels")+"_0.npy")
-    
-#     if size is not None:
-        
-#         ix = np.random.randint(arr.shape[0], size=size)
-#         arr = arr[ix,]
-#         labels = labels[ix,]
-    
-#     return arr, labels
+    # split into train and test sets
+    split_at = int(4*X.shape[0]/5)
+    X_train = X[0:split_at,]
+    y_train = y[0:split_at,]
+    X_test = X[split_at:,]
+    y_test = y[split_at:,]
+
+    return X_train.astype(int),y_train.astype(int), X_test.astype(int), y_test.astype(int)
 
 
-VECTORS_FILE = "data/vecs/w2v_vectors.npy"
+#./models/final_lstm20171213-1242.ckpt
+
+
+VECTORS_FILE = "data/w2v_vectors.npy"
 DATA_FILE_START = "yelp_w2vreviews"
 
 wordVectors = np.load(VECTORS_FILE)
 print("wordVectors shape", wordVectors.shape)
 
 
-train_data, train_labels = getYelpData()
-
-train_data, test_data, train_labels, test_labels = train_test_split(yelp_data,  yelp_data["target"], test_size=1.0/6, random_state=42)
+train_data, train_labels, test_data, test_labels = getYelpData(size=YELP_SIZE)
 
 print("train data shape", train_data.shape)
 print("train labels shape", train_labels.shape)
 print("train data max:", train_data.max())
-print("train data balance", train_labels.mean(axis=0))
-
-
-test_data, test_labels = getYelpTest()
-print(len(test_labels), test_labels.shape)
-print(test_data.shape)
+print("test labels and data shapes",test_labels.shape, test_data.shape)
 print("test data balance", test_labels.mean(axis=0))
-
-
+print("train data balance", train_labels.mean(axis=0))
 
 maxSeqLength = train_data.shape[1]
 numClasses = train_labels.shape[1]
@@ -197,15 +203,15 @@ for i in range(iterations):
         
 
 
-with codecs.open("logs/run_final_"+current_time+".txt",'w') as fp:
+str_params = [current_time, target, str(YELP_SIZE), str(BATCH_SIZE), str(iterations), load_path.split("/")[-1].replace(".ckpt", "")]
+with codecs.open("logs/retrained_"+'_'.join(str_params)+".txt",'w') as fp:
     fp.write("time " + current_time + "\n")
+    fp.write("YELP SIZE " + str(YELP_SIZE) + "\n")
     fp.write("BATCH_SIZE " + str(BATCH_SIZE) + "\n")
-    fp.write("TEST SIZE " + str(TEST_SIZE) + "\n")
-    fp.write("lstmUnits " + str(lstmUnits) + "\n")
+    fp.write("load model " + load_path + "\n")
     fp.write("iterations " + str(iterations) + "\n")
-    fp.write("test accuracy " + str(final_test_acc) + "\n")
-    fp.write("yelp accuracy " + str(final_yelp_acc) + "\n")
-
+    fp.write("target " + target + "\n")
+    fp.write("best amazon model " + load_path)
         
 
 

@@ -7,6 +7,7 @@ In this paper, we simulate an environment where a user is interested in performi
 We first clean the raw reviews for each source. Cleaning involves lemmatization, lower casing all words, and the sentiment score to binary mapping. This process reads from the data/<source>/raw and writes to the data/<source>/cleaned folder
 
 `$ python clean_data.py amazon` 
+
 `$ python clean_data.py yelp` 
 
 
@@ -28,7 +29,9 @@ The next step is to get embeddings for each review. To do this we use the Google
 A standard Tensorflow LSTM implementation with inputs for batch size, LSTM units, and iterations. A we used Google Cloud Platform to grid search across these parameters (https://github.com/cdepeuter/transfer_learning_lstm/blob/master/grid_search_lstm.py).
 
 `$ python lstm_gcp.py 512 96 5000` <- the best model, achieving 96% accuracy
+
 `$ python lstm_gcp.py 1024 48 5000`
+
 `$ python lstm_gcp.py 1024 96 5000`
 
 ## Yelp-trained LSTM (https://github.com/cdepeuter/transfer_learning_lstm/blob/master/yelp_lstm.py)
@@ -36,14 +39,19 @@ A standard Tensorflow LSTM implementation with inputs for batch size, LSTM units
 Since we were interested in 3 different outcome spaces, as well as how well the LSTM would do for different sizes of datasets, this file has inputs for the target variable, as well as the size of data to train on.
 
 `$ python yelp_lstm.py sentiment 15000`
+
 `$ python yelp_lstm.py stars 20000`
+
 `$ python yelp_lstm.py cats 20000`
 
 ## Retraining the last layer for Yelp data (https://github.com/cdepeuter/transfer_learning_lstm/blob/master/load_retrain_lstm.py)
 
 This file allows for retraining an inputted LSTM for different targets as well as Yelp data sizes. Example usage.
+
 `$ python load_retrain_lstm.py sentiment 24000`
+
 `$ python load_retrain_lstm.py stars 7500`
+
 `$ python load_retrain_lstm.py cats 2000`
 
 
